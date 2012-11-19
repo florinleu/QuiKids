@@ -4,95 +4,148 @@ function GameRepo()
 	var _fileReader;
 	var _dirReader;
 	var _textResourcesFile = null;
-	var _callback = null;
-
-	function _readQuestions(category, language, difficulty)
+	var _questionsResourcesFile = null;
+	var _successCallback = null;
+	var _failureCallback = null;
+	
+	var _category = null;
+	var _language = null;
+	var _difficulty = null;
+	
+	this.fillGameObjectQuestions = function(gameObject, successCallback, failureCallback)
 	{
+		if(undefined != gameObject && (gameObject instanceof GameObject))
+		{
+			_successCallback = successCallback;
+			_failureCallback = failureCallback;
+			_gameObj = gameObject;
+			readQuestions(_gameObj.getCategory(), _gameObj.getLanguage(), _gameObj.getDifficulty());
+		}
+	};
+
+	function readQuestions(category, language, difficulty)
+	{
+		_category = category;
+		_language = language;
+		_difficulty = difficulty;
+		
 		_dirReader = localFilesDir.createReader();
-		_dirReader.readEntries(function(entries)
-			{
-				//find the "Category" dir
-				for(var i in entries)
-				{
-					if(entries[i].name === categoriesDirName && entries[i].isDirectory)
-					{
-						var categoriesReader = entries[i].createReader();
-						categoriesReader.readEntries(function(entries)
-							{
-								//find the category folder
-								for(var i in entries)
-								{
-									if(entries[i].name === category && entries[i].isDirectory)
-									{
-										var categoryReader = entries[i].createReader();
-										categoryReader.readEntries(function(entries)
-											{
-												for(var i in entries)
-												{
-													if(entries[i].name === questionsFileName && entries[i].isFile)
-													{
-														_readQuestionsFile(entries[i]);
-													}
-													if(entries[i].name == language && entries[i].isDirectory)
-													{
-														var textResourcesReader = entries[i].createReader();
-														textResourcesReader.readEntries(function(entries)
-															{
-																for(var i in entries)
-																{
-																	var name = difficulty + ".xml";
-																	if(entries[i].name == name && entries[i].isFile)
-																	{
-																		_textResourcesFile = entries[i];
-																		break;
-																	}
-																}
-															}, function(error)
-															{
-																alert("readQuestionsFile error: " + error);
-															});
-													}
-												}
-											},
-											function(error)
-											{
-												alert("readQuestionsFile error: " + error);
-											});
-										break;
-									}
-								}
-							},
-							function(error)
-							{
-								alert("readQuestionsFile error: " + error);
-							});
-						break;
-					}
-				}
-			},
+		_dirReader.readEntries(localFilesDirReadingFinished,
 			function(error)
 			{
-				alert("readQuestionsFile error: " + error);
+				var errorString = "GameRepo: local files dir read error: " + error;
+				_failureCallback(errorString);
 			});
 	};
+	
+	/**
+	 * Gets called when the local files dir has been read.
+	 */
+	function localFilesDirReadingFinished(entries)
+	{
+		//find the "Category" dir
+		for(var i in entries)
+		{
+			if(entries[i].name === categoriesDirName && entries[i].isDirectory)
+			{
+				var categoriesReader = entries[i].createReader();
+				categoriesReader.readEntries(categoriesDirReadingFinished,
+					function(error)
+					{
+						var errorString = "GameRepo: categories dir reading error: " + error;
+						_failureCallback(errorString);
+					});
+				break;
+			}
+		}
+	}
+	 
+	/**
+	 * Gets called when the categories dir has been read.
+	 */
+	function categoriesDirReadingFinished(entries)
+	{
+		//find the category folder
+		for(var i in entries)
+		{
+			if(entries[i].name === _category && entries[i].isDirectory)
+			{
+				var categoryReader = entries[i].createReader();
+				categoryReader.readEntries(categoryDirReadingFinished,
+					function(error)
+					{
+						var errorString = "GameRepo: readQuestions2 error: " + error;
+						_failureCallback(errorString);
+					});
+				break;
+			}
+		}
+	}
+	
+	/**
+	 * Gets called when the category dir has been read.
+	 */
+	function categoryDirReadingFinished(entries)
+	{
+		for(var i in entries)
+		{
+			if(entries[i].name === questionsFileName && entries[i].isFile)
+			{
+				_questionsResourcesFile = entries[i];
+				if(null !== _textResourcesFile)
+				{
+					readQuestionsFile(_questionsResourcesFile);
+				}									
+			}
+			if(entries[i].name === _language && entries[i].isDirectory)
+			{
+				var textResourcesReader = entries[i].createReader();
+				textResourcesReader.readEntries(categoryLanguageFileReadingFinished, function(error)
+					{
+						var errorString = "GameRepo: readQuestions1 error: " + error;
+						_failureCallback(errorString);
+					});
+			}
+		}
+	}
+	
+	/**
+	 * Gets called when the category language directory has been read.
+	 */
+	function categoryLanguageFileReadingFinished(entries)
+	{
+		for(var i in entries)
+		{
+			var name = _difficulty + ".xml";
+			if(entries[i].name == name && entries[i].isFile)
+			{
+				_textResourcesFile = entries[i];
+				if(null !== _questionsResourcesFile)
+				{
+					readQuestionsFile(_questionsResourcesFile);
+				}
+				break;
+			}
+		}
+	}
 
 	/**
 	 * Sets the file editing panel to the selected file.
 	 * @param file FilEntry with the info about the selected file.
 	 */
-	function _readQuestionsFile(file)
+	function readQuestionsFile(file)
 	{
 		var reader = new FileReader();
 		reader.onloadend = function(evt){
 			var questionsFileContent = evt.target.result;
-			_parseQuestionsFileContent(questionsFileContent);
+			parseQuestionsFileContent(questionsFileContent);
 		};
 
 		// This call will invoke the onloaded callback above.
 		reader.readAsText(file);
 	};
 
-	function _parseQuestionsFileContent(content)
+	function parseQuestionsFileContent(content)
 	{
 		var parser;
 		var xmlDoc;
@@ -138,22 +191,22 @@ function GameRepo()
 
 			numberOfQuestionsNeeded--;
 		}
-		_readQuestionTextResources();
+		readQuestionTextResources();
 	};
 
-	function _readQuestionTextResources()
+	function readQuestionTextResources()
 	{
 		var reader = new FileReader();
 		reader.onloadend = function(evt){
 			var questionsFileContent = evt.target.result;
-			_parseTextResourcesFileContent(questionsFileContent);
+			parseTextResourcesFileContent(questionsFileContent);
 		};
 
 		// This call will invoke the onloaded callback above.
 		reader.readAsText(_textResourcesFile);
 	};
 
-	function _parseTextResourcesFileContent(content)
+	function parseTextResourcesFileContent(content)
 	{
 		var parser;
 		var xmlDoc;
@@ -182,17 +235,6 @@ function GameRepo()
 				}
 			}
 		}
-
-		_callback();
-	};
-
-	this.fillGameObjectQuestions = function(gameObject, callbackFunction)
-	{
-		if(undefined != gameObject && (gameObject instanceof GameObject))
-		{
-			_callback = callbackFunction;
-			_gameObj = gameObject;
-			_readQuestions(_gameObj.getCategory(), _gameObj.getLanguage(), _gameObj.getDifficulty());
-		}
+		_successCallback();
 	};
 };

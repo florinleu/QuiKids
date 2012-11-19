@@ -5,24 +5,50 @@
  * @param pushScreenCallback A callback the announces the main menu view controller that the 
  *        loading of the screen is done.
  */
-function QuickGameViewController(pushScreenCallback)
+function QuickGameViewController(language, pushScreenCallback)
 {
+	var _gameLanguage = language;
 	// keeps a randomly generated game object used for quick play
 	var _randomGameObject;
-	// solvedQuestion[i] = 0 if the question was not flaged as solved, 1 otherwise
-	var solvedQuestion = [];
+	// _solvedQuestion[i] = 0 if the question was not flaged as solved, 1 otherwise
+	var _solvedQuestion = [];
 	var _quickGameView;
 	var _score = 0;
 
-	generateRandomGameObject();
-
 	// Maps the questions to the tile text.
-	var questionTileMap = new Object();
-	
+	var _questionTileMap;
 	// the number of unsolved questions
-	var remainingQuestions = _randomGameObject.getNrOfTilesX() * _randomGameObject.getNrOfTilesY();
+	var _remainingQuestions;
 	// the index of the current question to be answered
-	var currentQuestionIndex;
+	var _currentQuestionIndex;
+	
+	/**
+	 * Initializes the screen and it's dependencies.
+	 * Should be called before pushing the screen.
+	 */
+	this.initUI = function()
+	{
+		generateRandomGameObject();
+		
+		_questionTileMap = new Object();
+		_remainingQuestions = _randomGameObject.getNrOfTilesX() * _randomGameObject.getNrOfTilesY();
+	}
+	
+	/**
+	 * Returns the game screen.
+	 */
+	this.getScreen = function()
+	{
+		return _quickGameView.getScreen();
+	};
+
+	/**
+	 * Pushes the game screen into the main stack screen.
+	 */
+	this.pushScreen = function()
+	{
+		_quickGameView.getScreen().pushTo(mainStackScreen);
+	};
 	
 	/**
 	 * Reads the screen language data from xml and shows the screen.
@@ -33,8 +59,17 @@ function QuickGameViewController(pushScreenCallback)
 		{
 			updateUI();
 			pushScreenCallback();
-		});
+		}, readQuickPlayLanguageFileReadingFailed);
 	};
+	
+	/**
+	 * Gets called when the quick play language file reading has failed.
+	 */
+	function readQuickPlayLanguageFileReadingFailed(errorString)
+	{
+		// TODO: handle the error properly
+		alert(errorString);
+	}
 	
 	/**
 	 * Updates the game screen UI with the localized text.
@@ -50,72 +85,120 @@ function QuickGameViewController(pushScreenCallback)
 	 */
 	function generateRandomGameObject()
 	{
-		var questionNumber = Math.floor(Math.random() * 4 + 1);
-		if (questionNumber === 1)
-			questionNumber = 2;
-		
 		var qArray = [];
-		_randomGameObject = new GameObject("Colors", "EN", 3, 3, "easy", qArray);
+		
+		var randomTileGridSize = getRandomTileGridSize();
+		_randomGameObject = new GameObject("Colors", _gameLanguage,
+											randomTileGridSize[0], randomTileGridSize[1],
+											"easy", qArray);
 
 		for(var i = 0; i < (_randomGameObject.getNrOfTilesX() * _randomGameObject.getNrOfTilesY()); i++)
 		{
-			solvedQuestion[i] = 0;
+			_solvedQuestion[i] = 0;
 		}
 
 		var gRepo = new GameRepo();
 
-		gRepo.fillGameObjectQuestions(_randomGameObject, function()
-			{
-				generateQuestionToTileMapping();
-				setNextQuestion(function()
-					{
-						// create a default value
-						_quickGameView =  new GameView(_randomGameObject, function(tileName)
-							{
-								if (questionTileMap[tileName] == currentQuestionIndex)
-								{
-									alert("CORRECT");
-									_score += 2;
-									_quickGameView.setGreenBorder(questionTileMap[tileName]);
-									_quickGameView.updateScoreValue(_score);
+		gRepo.fillGameObjectQuestions(_randomGameObject, gameObjectQuestionsFilled, fillGameObjectFailed);
+	}
+	
+	/**
+	 * Gets called when the game object questions have been filled.
+	 */
+	function gameObjectQuestionsFilled()
+	{
+		generateQuestionToTileMapping();
+		setNextQuestion(createGameView);
+	}
+	
+	/**
+	 * Gets called when the 'fillGameObjectQuestions' function encountered a problem.
+	 */
+	function fillGameObjectFailed(errorString)
+	{
+		// TODO: handle the error properly
+		alert(errorString);
+	}
+	
+	/**
+	 * Gets called after the next question has been set.
+	 * Creates the gameView.
+	 */
+	function createGameView()
+	{
+		// create a default value
+		_quickGameView =  new GameView(_randomGameObject, gameViewLoaded);
+		_quickGameView.createUI();
 
-									setNextQuestion(function()
-										{
-											//end game
-											if (currentQuestion === null)
-											{
-												alert("Jocul a luat sfarsit! Felicitari!");
-												// pop the screen from the stack
-												popGameScreen();
-											}
+		_quickGameView.setQuestionText(currentQuestion.getText());
 
-											_quickGameView.setQuestionText(currentQuestion.getText());
-										});
-								}
-								else
-								{
-									//alert("INCORRECT");
-									_score -= 1;
-									_quickGameView.updateScoreValue(_score);
-									_quickGameView.setRedBorder(questionTileMap[tileName]);
-									var interval = setInterval(function(){ _quickGameView.setBlueBorder(questionTileMap[tileName]); clearInterval(interval); }, 500);
-								}
-							});
+		//alert("current question" + currentQuestion);
+		// loads the localization data onto the screen widgets
+		loadScreen();
+	}
+	
+	/**
+	 * Gets called when the game view has been loaded.
+	 */
+	function gameViewLoaded(tileName)
+	{
+		if (_questionTileMap[tileName] == _currentQuestionIndex)
+		{
+			_score += 2;
+			_quickGameView.setCompleted(_questionTileMap[tileName]);
+			_quickGameView.updateScoreValue(_score);
+			_quickGameView.removeClickEvent(tileName);
+			
+			setNextQuestion(handleNextQuestion);
+		}
+		else
+		{
+			_score -= 1;
+			_quickGameView.updateScoreValue(_score);
+			_quickGameView.setRedBorder(_questionTileMap[tileName]);
+			var interval = setInterval(function(){ _quickGameView.setBlueBorder(_questionTileMap[tileName]); clearInterval(interval); }, 500);
+		}
+	}
+	
+	/**
+	 * Gets called after the next question has been set. Checks if the game has ended. If so,
+	 * pops the screen; sets the next question text otherwise.
+	 */
+	function handleNextQuestion()
+	{
+		//end game
+		if (currentQuestion === null)
+		{
+			alert("Game Over! Your score was: " + _score);
+			// pop the screen from the stack
+			popGameScreen();
+		}
 
-						_quickGameView.setQuestionText(currentQuestion.getText());
-
-						//alert("current question" + currentQuestion);
-						// loads the localization data onto the screen widgets
-						loadScreen();
-					});
-				});
+		_quickGameView.setQuestionText(currentQuestion.getText());
+	}
+	
+	/**
+	 * Gets an array containing the screen size based on the
+	 * available screen sizes.
+	 */
+	function getRandomTileGridSize()
+	{
+		var screenSizes = getAvailableTileFormats();
+		// we calculate a random index based on the length of the available screen sizes
+		var randIndex = Math.floor(Math.random() * screenSizes.length);
+		
+		var randGridSize = [];
+		randGridSize[0] = screenSizes[randIndex][0];
+		randGridSize[1] = screenSizes[randIndex][1];
+		
+		return randGridSize;
 	}
 
 	/**
 	 * Maps every tile name to the question index.
-	 * ex: questionTileMap["00"] = 0 // the first random question will occupy the
+	 * ex: _questionTileMap["00"] = 0 // the first random question will occupy the
 	 * tile at coordinates (0,0) inside the game view
-	 *     questionTileMap["01"] = 0 ...
+	 *     _questionTileMap["01"] = 0 ...
 	 */
 	function generateQuestionToTileMapping()
 	{
@@ -126,7 +209,7 @@ function QuickGameViewController(pushScreenCallback)
 			for (var j = 0; j < tilesPerAxis; j++)
 			{
 				var tile = _randomGameObject.getQuestion(index).getQuestionId();
-				questionTileMap[tile] = index;
+				_questionTileMap[tile] = index;
 				index++;
 			}
 		}
@@ -139,18 +222,18 @@ function QuickGameViewController(pushScreenCallback)
 	 */
 	function setNextQuestion(successCallback)
 	{
-		var questionNumber = Math.floor(Math.random() * (remainingQuestions - 1) + 1);
+		var questionNumber = Math.floor(Math.random() * (_remainingQuestions - 1) + 1);
 		var nrNotUsed = 0;
 		for (var i = 0; i < (_randomGameObject.getNrOfTilesX() * _randomGameObject.getNrOfTilesY()); i++)
 		{
-			if (solvedQuestion[i] === 0)
+			if (_solvedQuestion[i] === 0)
 			{
 				nrNotUsed++;
 				if (nrNotUsed === questionNumber)
 				{
-					remainingQuestions--;
-					solvedQuestion[i] = 1;
-					currentQuestionIndex = i;
+					_remainingQuestions--;
+					_solvedQuestion[i] = 1;
+					_currentQuestionIndex = i;
 					currentQuestion = _randomGameObject.getQuestion(i);
 					successCallback();
 					return;
@@ -168,22 +251,9 @@ function QuickGameViewController(pushScreenCallback)
 	function popGameScreen()
 	{
 		var stackScreen = document.getNativeElementById(mainStackScreen);
+		// pop the game screen
+		stackScreen.pop();
+		// pop the language screen
 		stackScreen.pop();
 	}
-
-	/**
-	 * Returns the game screen.
-	 */
-	this.getScreen = function()
-	{
-		return _quickGameView.getScreen();
-	};
-
-	/**
-	 * Pushes the game screen into the main stack screen.
-	 */
-	this.pushScreen = function()
-	{
-		_quickGameView.getScreen().pushTo(mainStackScreen);
-	};
 }
