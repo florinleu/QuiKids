@@ -10,14 +10,19 @@
 	<script type="text/javascript" charset="utf-8" src="js/wormhole.js"></script>
 	<script type="text/javascript" charset="utf-8" src="View/loadingView.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Model/global.js"></script>
+	<script type="text/javascript" charset="utf-8" src="Model/events.js"></script>
+	<script type="text/javascript" charset="utf-8" src="Model/util.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Model/questionObject.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Model/gameObject.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Repository/repoManager.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Repository/gameRepo.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Repository/mainScreenLanguageManager.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Repository/quickPlayScreenLanguageManager.js"></script>
+	<script type="text/javascript" charset="utf-8" src="Repository/gameLanguageScreenLanguageManager.js"></script>
 	<script type="text/javascript" charset="utf-8" src="View/mainMenuView.js"></script>
 	<script type="text/javascript" charset="utf-8" src="View/gameView.js"></script>
+	<script type="text/javascript" charset="utf-8" src="View/gameLanguageView.js"></script>
+	<script type="text/javascript" charset="utf-8" src="Controllers/gameLanguageViewController.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Controllers/quickGameViewController.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Controllers/mainMenuViewController.js"></script>
 	<script type="text/javascript" charset="utf-8" src="Controllers/applicationController.js"></script>
@@ -27,6 +32,13 @@
 		 */
 		function initialize()
 		{
+			document.addEventListener("deviceready", onDeviceReady, false);
+		}
+
+		function onDeviceReady()
+		{
+			setPlatform();
+			setScreenType();
 			mosync.nativeui.initUI();
 		}
 
@@ -40,9 +52,9 @@
 		mosync.nativeui.UIReady = function()
 		{
 			// create the main application view controller and show it
-			var applicationController = new ApplicationController(document.getNativeElementById(mainStackScreen));
-
-			applicationController.show();
+			var applicationController = new ApplicationController();
+			applicationController.initUI();
+			applicationController.pushScreen();
 		}
 	</script>
 </head>

@@ -27,7 +27,7 @@ var localFilesDir; // DirectoryEntry for the LocalFiles directory.
 /**
  * This function initializes the file manager.
  */
-function initFileManager(successCallback)
+function initFileManager(successCallback, failureCallback)
 {
 	window.requestFileSystem(
 		LocalFileSystem.PERSISTENT,
@@ -47,12 +47,93 @@ function initFileManager(successCallback)
 				},
 				function(error)
 				{
-					alert("initFileManager1 error: " + error);
+					var errorString = "initFileManager1 error: " + error;
+					failureCallback(errorString);
 				});
 		},
 		// Error callback.
 		function(error)
 		{
-			alert("initFileManager2 error: " + error);
+			var errorString = "initFileManager2 error: " + error;
+			failureCallback(errorString);
 		});
+}
+
+
+/**
+ * @brief Reads all the available application categories.
+ */
+function readAllCategories(successCallback, failureCallback)
+{
+	var categories = [];
+	var catCounter = 0;
+	
+	if (localFilesDir != undefined)
+	{
+		// set the success callback
+		callback = successCallback;
+		// read the list of directories under the resources rootDir
+		var dirReader = localFilesDir.createReader();
+		dirReader.readEntries(function(entries)
+		{
+			//find the "Category" dir
+			for(var i in entries)
+			{
+				if(entries[i].name === categoriesDirName && entries[i].isDirectory)
+				{
+					var categoriesReader = entries[i].createReader();
+					categoriesReader.readEntries(function(entries)
+					{
+						for(var i = 0; i < entries.length; i++)
+						{
+							if (entries[i].isDirectory)
+							{
+								categories[catCounter] = entries[i];
+								catCounter++;
+							}
+						}
+						successCallback(categories);
+					},
+					function(error)
+					{
+						var errorString = "readAllCategories1 error: " + error;
+						failureCallback(errorString);
+					});
+					break;
+				}
+			}
+		},
+		function(error)
+		{
+			var errorString = "readAllCategories2 error: " + error;
+			failureCallback(errorString);
+		});
+	}
+}
+
+function readCategoryLanguages(categoryEntry, successCallback, failureCallback)
+{
+	var languages = [];
+	var langCount = 0;
+
+	// read all the languages of the current category
+	var languageReader = categoryEntry.createReader();
+	languageReader.readEntries(function(entries)
+	{
+		for(var i = 0; i < entries.length; i++)
+		{
+			if (entries[i].isDirectory)
+			{
+				languages[langCount] = entries[i].name;
+				langCount++;
+			}
+		}
+			
+		successCallback(languages);
+	},
+	function(error)
+	{
+		var errorString = "readCategoryLanguage error:" + error;
+		failureCallback(errorString);
+	});
 }
